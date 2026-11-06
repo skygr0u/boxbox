@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+.venv/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+
+# macOS
+.DS_Store
+
+# Scratch work (experiments that are not part of the project)
+scratch/
