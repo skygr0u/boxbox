@@ -1,13 +1,22 @@
 """Download and load the lap data of a race from TracingInsights."""
 
-import requests
 import difflib
-import requests
 
+import requests
 
 CONTENTS_URL = "https://api.github.com/repos/TracingInsights/{year}/contents"
+DRIVERS_URL = "https://raw.githubusercontent.com/TracingInsights/{year}/main/{race}/{session}/drivers.json"
 TIMEOUT_SECONDS = 20
 GRAND_PRIX_SUFFIX = " Grand Prix"
+
+SESSION_FOLDERS = {
+    "R": "Race",
+    "Q": "Qualifying",
+    "S": "Sprint",
+    "P1": "Practice 1",
+    "P2": "Practice 2",
+    "P3": "Practice 3",
+}
 
 
 class DataLoadError(Exception):
@@ -108,3 +117,38 @@ def find_race(year, name):
             "Be more specific."
         )
     return matches[0]
+
+
+def list_drivers(year, race, session):
+    """
+    List the driver codes of a session.
+
+    Parameters
+    ----------
+    year : int
+        Season, for example 2022.
+    race : str
+        Folder name of the race, as returned by ``find_race``, for example
+        ``"Bahrain Grand Prix"``.
+    session : str
+        Session code, one of the keys of ``SESSION_FOLDERS`` (``"R"`` for the
+        race, ``"Q"`` for qualifying, ...). Upper and lower case are accepted.
+
+    Returns
+    -------
+    list of str
+        Three-letter driver codes, for example ``["VER", "GAS", ...]``.
+
+    Raises
+    ------
+    ValueError
+        If the session code is not one of ``SESSION_FOLDERS``.
+    """
+    session_folder = SESSION_FOLDERS.get(session.upper())
+    if session_folder is None:
+        valid = ", ".join(SESSION_FOLDERS)
+        raise ValueError(f"Invalid session '{session}'. Use one of: {valid}.")
+
+    url = DRIVERS_URL.format(year=year, race=race, session=session_folder)
+    data = fetch_json(url)
+    return [entry["driver"] for entry in data["drivers"]]
