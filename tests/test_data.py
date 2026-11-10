@@ -160,3 +160,52 @@ def test_list_drivers_invalid_session_raises_before_download(monkeypatch):
 
     with pytest.raises(ValueError, match="Invalid session 'x'"):
         data.list_drivers(2022, "Bahrain Grand Prix", "x")
+
+
+# load_driver_laps
+
+
+def test_load_driver_laps_returns_one_row_per_lap(monkeypatch):
+    fake_json = {"lap": [1, 2], "time": [99.07, 97.85], "drv": ["LEC", "LEC"]}
+    monkeypatch.setattr(data, "fetch_json", lambda url: fake_json)
+
+    laps = data.load_driver_laps(2022, "Bahrain Grand Prix", "R", "LEC")
+
+    assert len(laps) == 2
+    assert list(laps.columns) == ["lap", "time", "drv"]
+    assert laps["lap"].tolist() == [1, 2]
+
+
+def test_load_driver_laps_builds_the_url(monkeypatch):
+    seen = []
+
+    def fake_fetch(url):
+        seen.append(url)
+        return {"lap": [1]}
+
+    monkeypatch.setattr(data, "fetch_json", fake_fetch)
+
+    data.load_driver_laps(2022, "Bahrain Grand Prix", "q", "LEC")
+
+    assert "/TracingInsights/2022/" in seen[0]
+    assert "/Bahrain Grand Prix/Qualifying/LEC/laptimes.json" in seen[0]
+
+
+def test_load_driver_laps_invalid_session_raises_before_download(monkeypatch):
+    def fail(url):
+        raise AssertionError("fetch_json must not be called")
+
+    monkeypatch.setattr(data, "fetch_json", fail)
+
+    with pytest.raises(ValueError, match="Invalid session 'x'"):
+        data.load_driver_laps(2022, "Bahrain Grand Prix", "x", "LEC")
+
+
+def test_load_driver_laps_lets_download_errors_through(monkeypatch):
+    def broken_fetch(url):
+        raise data.DataLoadError("404")
+
+    monkeypatch.setattr(data, "fetch_json", broken_fetch)
+
+    with pytest.raises(data.DataLoadError):
+        data.load_driver_laps(2022, "Bahrain Grand Prix", "R", "XXX")
