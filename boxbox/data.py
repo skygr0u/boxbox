@@ -224,3 +224,44 @@ def load_driver_laps(year, race, session, driver):
     )
     data = fetch_json(url)
     return pd.DataFrame(data)
+
+
+def load_laps(year, race, session="R"):
+    """
+    Load the laps of all the drivers of a session as one table.
+
+    The race name can be partial and in any case (``"bahrain"``). The result
+    has one row per lap per driver, in the order of ``list_drivers``, with the
+    values as downloaded (missing values are still the text ``"None"``).
+
+    Parameters
+    ----------
+    year : int
+        Season, for example 2022.
+    race : str
+        Full or partial name of the race, as typed by the user.
+    session : str, optional
+        Session code, one of the keys of ``SESSION_FOLDERS``. Defaults to
+        ``"R"`` (the race).
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per lap of every driver. The column ``drv`` tells which
+        driver a row belongs to.
+
+    Raises
+    ------
+    ValueError
+        If the race name matches no race or several races, or if the session
+        code is not valid.
+    DataLoadError
+        If any of the downloads fails: the table is never returned with a
+        driver missing.
+    """
+    race_folder = find_race(year, race)
+    driver_codes = list_drivers(year, race_folder, session)
+    tables = [
+        load_driver_laps(year, race_folder, session, driver) for driver in driver_codes
+    ]
+    return pd.concat(tables, ignore_index=True)
