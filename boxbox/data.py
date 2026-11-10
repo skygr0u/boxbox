@@ -2,11 +2,21 @@
 
 import difflib
 
+import pandas as pd
 import requests
 
 CONTENTS_URL = "https://api.github.com/repos/TracingInsights/{year}/contents"
-DRIVERS_URL = "https://raw.githubusercontent.com/TracingInsights/{year}/main/{race}/{session}/drivers.json"
+DRIVERS_URL = (
+    "https://raw.githubusercontent.com/TracingInsights/{year}/main/"
+    "{race}/{session}/drivers.json"
+)
+DRIVER_LAPS_URL = (
+    "https://raw.githubusercontent.com/TracingInsights/{year}/main/"
+    "{race}/{session}/{driver}/laptimes.json"
+)
+
 TIMEOUT_SECONDS = 20
+
 GRAND_PRIX_SUFFIX = " Grand Prix"
 
 SESSION_FOLDERS = {
@@ -175,3 +185,42 @@ def list_drivers(year, race, session):
     url = DRIVERS_URL.format(year=year, race=race, session=session_folder)
     data = fetch_json(url)
     return [entry["driver"] for entry in data["drivers"]]
+
+
+def load_driver_laps(year, race, session, driver):
+    """
+    Download the laps of one driver in a session as a table.
+
+    The table has one row per lap and one column per field of
+    ``laptimes.json``. The values are returned as downloaded: missing values
+    are still the text ``"None"``.
+
+    Parameters
+    ----------
+    year : int
+        Season, for example 2022.
+    race : str
+        Folder name of the race, as returned by ``find_race``, for example
+        ``"Bahrain Grand Prix"``.
+    session : str
+        Session code, one of the keys of ``SESSION_FOLDERS``. Upper and lower
+        case are accepted.
+    driver : str
+        Three-letter driver code, for example ``"LEC"``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per lap of the driver.
+
+    Raises
+    ------
+    ValueError
+        If the session code is not one of ``SESSION_FOLDERS``.
+    """
+    session_folder = get_session_folder(session)
+    url = DRIVER_LAPS_URL.format(
+        year=year, race=race, session=session_folder, driver=driver
+    )
+    data = fetch_json(url)
+    return pd.DataFrame(data)
