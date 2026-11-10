@@ -115,6 +115,19 @@ def test_find_race_several_matches_raises(monkeypatch):
         data.find_race(2022, "grand")
 
 
+# get_session_folder
+
+
+def test_get_session_folder_translates_code_ignoring_case():
+    assert data.get_session_folder("r") == "Race"
+    assert data.get_session_folder("Q") == "Qualifying"
+
+
+def test_get_session_folder_invalid_code_raises():
+    with pytest.raises(ValueError, match="Invalid session 'x'"):
+        data.get_session_folder("x")
+
+
 # list_drivers
 
 

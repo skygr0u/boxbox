@@ -119,6 +119,33 @@ def find_race(year, name):
     return matches[0]
 
 
+def get_session_folder(session):
+    """
+    Translate a session code into the name of its folder on GitHub.
+
+    Parameters
+    ----------
+    session : str
+        Session code, one of the keys of ``SESSION_FOLDERS`` (``"R"`` for the
+        race, ``"Q"`` for qualifying, ...). Upper and lower case are accepted.
+
+    Returns
+    -------
+    str
+        The folder name, for example ``"Race"`` for ``"R"``.
+
+    Raises
+    ------
+    ValueError
+        If the session code is not one of ``SESSION_FOLDERS``.
+    """
+    session_folder = SESSION_FOLDERS.get(session.upper())
+    if session_folder is None:
+        valid = ", ".join(SESSION_FOLDERS)
+        raise ValueError(f"Invalid session '{session}'. Use one of: {valid}.")
+    return session_folder
+
+
 def list_drivers(year, race, session):
     """
     List the driver codes of a session.
@@ -144,11 +171,7 @@ def list_drivers(year, race, session):
     ValueError
         If the session code is not one of ``SESSION_FOLDERS``.
     """
-    session_folder = SESSION_FOLDERS.get(session.upper())
-    if session_folder is None:
-        valid = ", ".join(SESSION_FOLDERS)
-        raise ValueError(f"Invalid session '{session}'. Use one of: {valid}.")
-
+    session_folder = get_session_folder(session)
     url = DRIVERS_URL.format(year=year, race=race, session=session_folder)
     data = fetch_json(url)
     return [entry["driver"] for entry in data["drivers"]]
