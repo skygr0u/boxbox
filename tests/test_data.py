@@ -1,5 +1,6 @@
 """Tests for boxbox.data. No test uses the internet: downloads are faked."""
 
+import pandas as pd
 import pytest
 import requests
 
@@ -209,3 +210,89 @@ def test_load_driver_laps_lets_download_errors_through(monkeypatch):
 
     with pytest.raises(data.DataLoadError):
         data.load_driver_laps(2022, "Bahrain Grand Prix", "R", "XXX")
+
+
+# load_laps
+
+
+def fake_driver_table(year, race, session, driver):
+    """Two laps for VER, one lap for any other driver."""
+    laps = [1, 2] if driver == "VER" else [1]
+    return pd.DataFrame({"lap": laps, "drv": [driver] * len(laps)})
+
+
+def test_load_laps_stacks_the_drivers_in_order(monkeypatch):
+    monkeypatch.setattr(data, "find_race", lambda year, race: "Bahrain Grand Prix")
+    monkeypatch.setattr(
+        data, "list_drivers", lambda year, race, session: ["VER", "GAS"]
+    )
+    monkeypatch.setattr(data, "load_driver_laps", fake_driver_table)
+
+    laps = data.load_laps(2022, "bahrain")
+
+    assert laps["drv"].tolist() == ["VER", "VER", "GAS"]
+    assert laps["lap"].tolist() == [1, 2, 1]
+    assert laps.index.tolist() == [0, 1, 2]
+
+
+def test_load_laps_passes_the_folder_name_and_session(monkeypatch):
+    seen = {}
+
+    def fake_find_race(year, race):
+        seen["find_race"] = (year, race)
+        return "Bahrain Grand Prix"
+
+    def fake_list_drivers(year, race, session):
+        seen["list_drivers"] = (year, race, session)
+        return ["VER", "GAS"]
+
+    drivers_asked = []
+
+    def fake_load_driver_laps(year, race, session, driver):
+        drivers_asked.append((year, race, session, driver))
+        return fake_driver_table(year, race, session, driver)
+
+    monkeypatch.setattr(data, "find_race", fake_find_race)
+    monkeypatch.setattr(data, "list_drivers", fake_list_drivers)
+    monkeypatch.setattr(data, "load_driver_laps", fake_load_driver_laps)
+
+    data.load_laps(2022, "bahrain", "Q")
+
+    assert seen["find_race"] == (2022, "bahrain")
+    assert seen["list_drivers"] == (2022, "Bahrain Grand Prix", "Q")
+    assert drivers_asked == [
+        (2022, "Bahrain Grand Prix", "Q", "VER"),
+        (2022, "Bahrain Grand Prix", "Q", "GAS"),
+    ]
+
+
+def test_load_laps_default_session_is_the_race(monkeypatch):
+    seen = []
+
+    def fake_list_drivers(year, race, session):
+        seen.append(session)
+        return ["VER"]
+
+    monkeypatch.setattr(data, "find_race", lambda year, race: "Bahrain Grand Prix")
+    monkeypatch.setattr(data, "list_drivers", fake_list_drivers)
+    monkeypatch.setattr(data, "load_driver_laps", fake_driver_table)
+
+    data.load_laps(2022, "bahrain")
+
+    assert seen == ["R"]
+
+
+def test_load_laps_stops_when_one_download_fails(monkeypatch):
+    def fail_for_gas(year, race, session, driver):
+        if driver == "GAS":
+            raise data.DataLoadError("404")
+        return fake_driver_table(year, race, session, driver)
+
+    monkeypatch.setattr(data, "find_race", lambda year, race: "Bahrain Grand Prix")
+    monkeypatch.setattr(
+        data, "list_drivers", lambda year, race, session: ["VER", "GAS"]
+    )
+    monkeypatch.setattr(data, "load_driver_laps", fail_for_gas)
+
+    with pytest.raises(data.DataLoadError):
+        data.load_laps(2022, "bahrain")
