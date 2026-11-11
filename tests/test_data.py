@@ -296,3 +296,79 @@ def test_load_laps_stops_when_one_download_fails(monkeypatch):
 
     with pytest.raises(data.DataLoadError):
         data.load_laps(2022, "bahrain")
+
+
+# prepare_laps
+
+
+def make_raw_laps():
+    """Two laps as downloaded: missing values are the text "None"."""
+    return pd.DataFrame(
+        {
+            "time": [95.2, "None"],
+            "lap": [1, 2],
+            "compound": ["SOFT", "SOFT"],
+            "stint": [1, 1],
+            "life": [1, 2],
+            "pos": [1, "None"],
+            "status": ["1", "1"],
+            "drv": ["VER", "VER"],
+            "pout": ["None", "None"],
+            "pin": ["None", 80.0],
+            "fresh": [True, True],
+            "team": ["Red Bull Racing", "Red Bull Racing"],
+            "del": [False, False],
+            "iacc": [True, True],
+            "s1": [30.1, "None"],
+        }
+    )
+
+
+def test_columns_to_convert_are_all_kept():
+    assert set(data.COLUMNS_TO_CONVERT) <= set(data.COLUMNS)
+
+
+def test_prepare_laps_keeps_only_the_chosen_columns():
+    laps = data.prepare_laps(make_raw_laps())
+
+    assert list(laps.columns) == data.COLUMNS
+
+
+def test_prepare_laps_turns_none_text_into_nan():
+    laps = data.prepare_laps(make_raw_laps())
+
+    assert laps["pos"].isna().tolist() == [False, True]
+    assert laps["pin"].isna().tolist() == [True, False]
+    assert laps["pout"].isna().tolist() == [True, True]
+
+
+def test_prepare_laps_converts_to_numbers():
+    laps = data.prepare_laps(make_raw_laps())
+
+    for column in data.COLUMNS_TO_CONVERT:
+        assert pd.api.types.is_float_dtype(laps[column])
+    assert laps["time"][0] == 95.2
+
+
+def test_prepare_laps_leaves_the_other_columns_alone():
+    laps = data.prepare_laps(make_raw_laps())
+
+    assert laps["lap"].tolist() == [1, 2]
+    assert laps["compound"].tolist() == ["SOFT", "SOFT"]
+    assert laps["fresh"].tolist() == [True, True]
+
+
+def test_prepare_laps_does_not_modify_its_input():
+    raw = make_raw_laps()
+
+    data.prepare_laps(raw)
+
+    assert raw.shape == (2, 15)
+    assert raw["pos"].tolist() == [1, "None"]
+
+
+def test_prepare_laps_missing_column_raises():
+    raw = make_raw_laps().drop(columns=["team"])
+
+    with pytest.raises(KeyError):
+        data.prepare_laps(raw)
