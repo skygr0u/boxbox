@@ -372,3 +372,159 @@ def test_prepare_laps_missing_column_raises():
 
     with pytest.raises(KeyError):
         data.prepare_laps(raw)
+
+
+# snapshot_path, save_laps, read_laps, get_laps
+
+
+def test_snapshot_path_builds_the_file_name():
+    path = data.snapshot_path(2022, "Bahrain", "r")
+
+    assert path.name == "2022_bahrain_R.csv"
+    assert path.parent == data.SNAPSHOTS_DIR
+
+
+def test_snapshot_path_replaces_spaces_in_the_race_name():
+    path = data.snapshot_path(2022, "Emilia Romagna", "Q")
+
+    assert path.name == "2022_emilia_romagna_Q.csv"
+
+
+def test_snapshot_path_same_for_any_spelling():
+    assert data.snapshot_path(2022, "BAHRAIN", "R") == data.snapshot_path(
+        2022, "bahrain", "r"
+    )
+
+
+def make_saved_table():
+    """Three laps as downloaded: missing values are the text "None"."""
+    return pd.DataFrame(
+        {
+            "lap": [1, 2, 3],
+            "time": [95.2, "None", 96.1],
+            "status": ["1", "12", "4"],
+            "drv": ["VER", "VER", "VER"],
+        }
+    )
+
+
+def test_save_and_read_laps_round_trip(tmp_path):
+    path = tmp_path / "laps.csv"
+    laps = make_saved_table()
+
+    data.save_laps(laps, path)
+    back = data.read_laps(path)
+
+    assert list(back.columns) == list(laps.columns)
+    assert back["lap"].tolist() == [1, 2, 3]
+    assert back["drv"].tolist() == ["VER", "VER", "VER"]
+
+
+def test_save_laps_creates_the_missing_folders(tmp_path):
+    path = tmp_path / "data" / "snapshots" / "laps.csv"
+
+    data.save_laps(make_saved_table(), path)
+
+    assert path.exists()
+
+
+def test_read_laps_keeps_status_as_text(tmp_path):
+    path = tmp_path / "laps.csv"
+    data.save_laps(make_saved_table(), path)
+
+    back = data.read_laps(path)
+
+    assert back["status"].tolist() == ["1", "12", "4"]
+
+
+def test_read_laps_reads_none_as_nan(tmp_path):
+    path = tmp_path / "laps.csv"
+    data.save_laps(make_saved_table(), path)
+
+    back = data.read_laps(path)
+
+    assert back["time"].isna().tolist() == [False, True, False]
+
+
+def test_read_laps_missing_file_raises(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        data.read_laps(tmp_path / "nothing.csv")
+
+
+def use_fake_download(monkeypatch, tmp_path):
+    """Send the snapshots to tmp_path and fake load_laps. Return its calls."""
+    calls = []
+
+    def fake_load_laps(year, race, session):
+        calls.append((year, race, session))
+        return make_saved_table()
+
+    monkeypatch.setattr(data, "SNAPSHOTS_DIR", tmp_path)
+    monkeypatch.setattr(data, "load_laps", fake_load_laps)
+    return calls
+
+
+def test_get_laps_downloads_and_saves_when_the_file_is_missing(monkeypatch, tmp_path):
+    calls = use_fake_download(monkeypatch, tmp_path)
+
+    laps = data.get_laps(2022, "bahrain")
+
+    assert calls == [(2022, "bahrain", "R")]
+    assert (tmp_path / "2022_bahrain_R.csv").exists()
+    assert len(laps) == 3
+
+
+def test_get_laps_reads_the_file_without_downloading(monkeypatch, tmp_path):
+    calls = use_fake_download(monkeypatch, tmp_path)
+
+    first = data.get_laps(2022, "bahrain")
+    second = data.get_laps(2022, "bahrain")
+
+    assert len(calls) == 1
+    assert first.equals(second)
+
+
+def test_get_laps_refresh_downloads_again(monkeypatch, tmp_path):
+    calls = use_fake_download(monkeypatch, tmp_path)
+
+    data.get_laps(2022, "bahrain")
+    data.get_laps(2022, "bahrain", refresh=True)
+
+    assert len(calls) == 2
+
+
+def test_get_laps_passes_the_session_on(monkeypatch, tmp_path):
+    calls = use_fake_download(monkeypatch, tmp_path)
+
+    data.get_laps(2022, "bahrain", "Q")
+
+    assert calls == [(2022, "bahrain", "Q")]
+    assert (tmp_path / "2022_bahrain_Q.csv").exists()
+
+
+def test_get_laps_failed_download_saves_nothing(monkeypatch, tmp_path):
+    def failing_load_laps(year, race, session):
+        raise data.DataLoadError("404")
+
+    monkeypatch.setattr(data, "SNAPSHOTS_DIR", tmp_path)
+    monkeypatch.setattr(data, "load_laps", failing_load_laps)
+
+    with pytest.raises(data.DataLoadError):
+        data.get_laps(2022, "bahrain")
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_get_laps_failed_refresh_keeps_the_old_file(monkeypatch, tmp_path):
+    use_fake_download(monkeypatch, tmp_path)
+    data.get_laps(2022, "bahrain")
+
+    def failing_load_laps(year, race, session):
+        raise data.DataLoadError("404")
+
+    monkeypatch.setattr(data, "load_laps", failing_load_laps)
+
+    with pytest.raises(data.DataLoadError):
+        data.get_laps(2022, "bahrain", refresh=True)
+
+    assert len(data.read_laps(tmp_path / "2022_bahrain_R.csv")) == 3
