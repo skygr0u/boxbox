@@ -28,6 +28,25 @@ SESSION_FOLDERS = {
     "P3": "Practice 3",
 }
 
+COLUMNS = [
+    "time",
+    "lap",
+    "compound",
+    "stint",
+    "life",
+    "pos",
+    "status",
+    "drv",
+    "pout",
+    "pin",
+    "fresh",
+    "team",
+    "del",
+    "iacc",
+]
+
+COLUMNS_TO_CONVERT = ["time", "pos", "pin", "pout"]
+
 
 class DataLoadError(Exception):
     """Raised when data cannot be downloaded or read."""
@@ -265,3 +284,33 @@ def load_laps(year, race, session="R"):
         load_driver_laps(year, race_folder, session, driver) for driver in driver_codes
     ]
     return pd.concat(tables, ignore_index=True)
+
+
+def prepare_laps(laps):
+    """
+    Keep the columns used by the analysis and convert the numbers.
+
+    Only the columns in ``COLUMNS`` are kept. In the columns of
+    ``COLUMNS_TO_CONVERT`` the text ``"None"`` (and any other text that is not
+    a number) becomes ``NaN`` and the column becomes numeric. The input table
+    is not modified.
+
+    Parameters
+    ----------
+    laps : pandas.DataFrame
+        Table as returned by ``load_laps``, with the columns of ``COLUMNS``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A new table with the columns of ``COLUMNS`` only.
+
+    Raises
+    ------
+    KeyError
+        If a column of ``COLUMNS`` is missing from ``laps``.
+    """
+    laps = laps[COLUMNS].copy()
+    for column in COLUMNS_TO_CONVERT:
+        laps[column] = pd.to_numeric(laps[column], errors="coerce")
+    return laps
