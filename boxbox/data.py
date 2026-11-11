@@ -1,9 +1,14 @@
 """Download and load the lap data of a race from TracingInsights."""
 
 import difflib
+from pathlib import Path
 
 import pandas as pd
 import requests
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+SNAPSHOTS_DIR = PROJECT_ROOT / "data" / "snapshots"
 
 CONTENTS_URL = "https://api.github.com/repos/TracingInsights/{year}/contents"
 DRIVERS_URL = (
@@ -314,3 +319,122 @@ def prepare_laps(laps):
     for column in COLUMNS_TO_CONVERT:
         laps[column] = pd.to_numeric(laps[column], errors="coerce")
     return laps
+
+
+def snapshot_path(year, race, session):
+    """
+    Build the path of the CSV snapshot of a session.
+
+    The name is built from the text given by the user, without any download,
+    so it can be computed offline. For example, ``(2022, "Bahrain", "r")``
+    gives ``data/snapshots/2022_bahrain_R.csv``.
+
+    Parameters
+    ----------
+    year : int
+        Season, for example 2022.
+    race : str
+        Race name as typed by the user. It is put in lower case and the
+        spaces become ``_``.
+    session : str
+        Session code, for example ``"R"``. It is put in upper case.
+
+    Returns
+    -------
+    pathlib.Path
+        Path of the file, inside ``SNAPSHOTS_DIR``. The file may not exist.
+    """
+    race_name = race.lower().replace(" ", "_")
+    return SNAPSHOTS_DIR / f"{year}_{race_name}_{session.upper()}.csv"
+
+
+def save_laps(laps, path):
+    """
+    Save a table of laps as a CSV file.
+
+    The folder is created if it does not exist, and an existing file is
+    overwritten. The row numbers are not written.
+
+    Parameters
+    ----------
+    laps : pandas.DataFrame
+        Table to save, for example the result of ``load_laps``.
+    path : str or pathlib.Path
+        Destination file.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    laps.to_csv(path, index=False)
+
+
+def read_laps(path):
+    """
+    Read a CSV file written by ``save_laps``.
+
+    The column ``status`` is read as text: without this, ``"12"`` would
+    become the number 12 and ``"1"`` the number 1, and a comparison with
+    ``"1"`` would never be true. The text ``"None"`` of the original data
+    is read as ``NaN``.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        File to read.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The saved table.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file does not exist.
+    """
+    return pd.read_csv(path, dtype={"status": str})
+
+
+def get_laps(year, race, session="R", refresh=False):
+    """
+    Return the laps of a session, downloading them only when needed.
+
+    The table is read from the CSV snapshot of ``snapshot_path``. If the file
+    does not exist, or ``refresh`` is true, the laps are first downloaded with
+    ``load_laps`` and saved as a snapshot. In both cases the returned table is
+    the one read from the file, so it has the same types whether or not a
+    download took place.
+
+    The table is the raw one (all the columns). Use ``prepare_laps`` to keep
+    the columns of the analysis and convert the numbers.
+
+    Parameters
+    ----------
+    year : int
+        Season, for example 2022.
+    race : str
+        Full or partial name of the race, for example ``"bahrain"``.
+    session : str, optional
+        Session code, one of the keys of ``SESSION_FOLDERS``. Defaults to
+        ``"R"`` (the race).
+    refresh : bool, optional
+        If true, download again and overwrite the snapshot. Defaults to
+        False.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per lap of every driver.
+
+    Raises
+    ------
+    ValueError
+        If a download is needed and the race name or the session is not valid.
+    DataLoadError
+        If a download is needed and it fails. The existing snapshot, if any,
+        is left untouched.
+    """
+    path = snapshot_path(year, race, session)
+    if refresh or not path.exists():
+        laps = load_laps(year, race, session)
+        save_laps(laps, path)
+    return read_laps(path)
