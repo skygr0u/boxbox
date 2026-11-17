@@ -227,3 +227,164 @@ def test_get_stints_missing_column_raises():
 
     with pytest.raises(KeyError):
         analysis.get_stints(laps)
+
+
+# driver_strategies
+
+
+def make_driver_laps(drv, stints, positions, last_lap_completed=True):
+    """
+    The laps of one driver. ``stints`` is a list of ``(compound, laps)`` and
+    ``positions`` has one position per lap.
+
+    If ``last_lap_completed`` is False, the last lap has no time and no
+    position, like the last lap of a driver who retired during it.
+    """
+    rows = []
+    lap = 0
+    for stint, (compound, count) in enumerate(stints, start=1):
+        for age in range(count):
+            lap += 1
+            rows.append(
+                {
+                    "drv": drv,
+                    "team": f"Team {drv}",
+                    "stint": stint,
+                    "compound": compound,
+                    "lap": lap,
+                    "life": 1 + age,
+                    "time": 90.0,
+                    "pos": float(positions[lap - 1]),
+                }
+            )
+    laps = pd.DataFrame(rows)
+    if not last_lap_completed:
+        laps.loc[laps.index[-1], ["time", "pos"]] = float("nan")
+    return laps
+
+
+def make_race(*drivers):
+    return pd.concat(drivers, ignore_index=True)
+
+
+def test_driver_strategies_gives_the_strategy_and_the_stops():
+    laps = make_driver_laps("AAA", [("SOFT", 5), ("HARD", 5), ("SOFT", 5)], [1] * 15)
+
+    result = analysis.driver_strategies(laps)
+
+    assert result["strategy"].tolist() == ["SOFT-HARD-SOFT"]
+    assert result["stops"].tolist() == [2]
+    assert result["team"].tolist() == ["Team AAA"]
+
+
+def test_driver_strategies_has_the_documented_columns():
+    laps = make_driver_laps("AAA", [("SOFT", 5)], [1] * 5)
+
+    result = analysis.driver_strategies(laps)
+
+    assert list(result.columns) == [
+        "drv",
+        "team",
+        "strategy",
+        "stops",
+        "laps_completed",
+        "classified",
+        "pos_lap1",
+        "final_pos",
+        "positions_gained",
+    ]
+
+
+def test_driver_strategies_positions_gained_since_lap_1():
+    race = make_race(
+        make_driver_laps("AAA", [("SOFT", 10)], [5, 4, 3, 3, 3, 3, 3, 3, 3, 2]),
+        make_driver_laps("BBB", [("SOFT", 10)], [1] * 10),
+    )
+
+    result = analysis.driver_strategies(race).set_index("drv")
+
+    assert result.loc["AAA", "pos_lap1"] == 5
+    assert result.loc["AAA", "final_pos"] == 2
+    assert result.loc["AAA", "positions_gained"] == 3
+    assert result.loc["BBB", "positions_gained"] == 0
+
+
+def test_driver_strategies_more_laps_rank_ahead_of_a_better_last_position():
+    # BBB was first when he retired after 6 laps; AAA finished fifth.
+    race = make_race(
+        make_driver_laps("AAA", [("SOFT", 10)], [5] * 10),
+        make_driver_laps("BBB", [("SOFT", 6)], [1] * 6),
+    )
+
+    result = analysis.driver_strategies(race)
+
+    assert result["drv"].tolist() == ["AAA", "BBB"]
+    assert result["final_pos"].tolist() == [1, 2]
+
+
+def test_driver_strategies_same_laps_are_ordered_by_last_position():
+    race = make_race(
+        make_driver_laps("AAA", [("SOFT", 10)], [2] * 10),
+        make_driver_laps("BBB", [("SOFT", 10)], [1] * 10),
+    )
+
+    result = analysis.driver_strategies(race)
+
+    assert result["drv"].tolist() == ["BBB", "AAA"]
+
+
+def test_driver_strategies_a_last_lap_not_completed_gives_no_tie():
+    # PER was third on lap 9 but did not complete lap 10, like HAM's rival at
+    # the end of the real race: he must rank behind HAM, not tie with him.
+    race = make_race(
+        make_driver_laps("LEC", [("SOFT", 10)], [1] * 10),
+        make_driver_laps("SAI", [("SOFT", 10)], [2] * 10),
+        make_driver_laps("HAM", [("SOFT", 10)], [3] * 10),
+        make_driver_laps("PER", [("SOFT", 10)], [3] * 10, last_lap_completed=False),
+    )
+
+    result = analysis.driver_strategies(race).set_index("drv")
+
+    assert result.loc["PER", "laps_completed"] == 9
+    assert result.loc["HAM", "final_pos"] == 3
+    assert result.loc["PER", "final_pos"] == 4
+    assert sorted(result["final_pos"].tolist()) == [1, 2, 3, 4]
+
+
+def test_driver_strategies_classified_needs_90_percent_of_the_laps():
+    race = make_race(
+        make_driver_laps("AAA", [("SOFT", 10)], [1] * 10),
+        make_driver_laps("BBB", [("SOFT", 9)], [2] * 9),
+        make_driver_laps("CCC", [("SOFT", 8)], [3] * 8),
+    )
+
+    result = analysis.driver_strategies(race)
+
+    assert len(result) == 3
+    assert result["drv"].tolist() == ["AAA", "BBB", "CCC"]
+    assert result["classified"].tolist() == [True, True, False]
+
+
+def test_driver_strategies_does_not_modify_its_input():
+    laps = make_driver_laps("AAA", [("SOFT", 5), ("HARD", 5)], [1] * 10)
+
+    analysis.driver_strategies(laps)
+
+    assert list(laps.columns) == [
+        "drv",
+        "team",
+        "stint",
+        "compound",
+        "lap",
+        "life",
+        "time",
+        "pos",
+    ]
+    assert len(laps) == 10
+
+
+def test_driver_strategies_missing_column_raises():
+    laps = make_driver_laps("AAA", [("SOFT", 5)], [1] * 5).drop(columns=["time"])
+
+    with pytest.raises(KeyError):
+        analysis.driver_strategies(laps)
