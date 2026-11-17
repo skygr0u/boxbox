@@ -1,5 +1,7 @@
 """Answer the questions about the race: pace, tyre strategy, degradation."""
 
+import pandas as pd
+
 # A driver needs at least this share of the clean laps of the driver who has
 # the most of them, to be compared fairly (a driver who retired early is out).
 MIN_LAP_SHARE = 0.7
@@ -7,6 +9,16 @@ MIN_LAP_SHARE = 0.7
 # A driver is classified if he completed at least this share of the laps of
 # the driver who completed the most (the official rule of the championship).
 CLASSIFIED_SHARE = 0.9
+
+
+# A stint is compared at its start and at its end: this is the number of
+# clean laps averaged at each end.
+FIRST_LAST_LAPS = 3
+
+# Stints with fewer clean laps are left out: on Bahrain 2022 they gave
+# extreme values (from -0.40 to +0.31 s per lap) because the two ends of the
+# stint are too close in tyre age.
+MIN_CLEAN_LAPS = 10
 
 
 def race_pace(laps):
@@ -192,3 +204,59 @@ def driver_strategies(laps):
         "positions_gained",
     ]
     return summary[columns].reset_index()
+
+
+def tyre_degradation(laps):
+    """Measure how much lap time a set of tyres loses per lap of age.
+
+    For each stint, the mean of the first clean laps is compared with the
+    mean of the last clean laps. The difference in lap time is divided by
+    the difference in tyre age (``life``).
+
+    Parameters
+    ----------
+    laps : pandas.DataFrame
+        Prepared laps with the columns ``drv``, ``stint``, ``compound``,
+        ``life``, ``time`` and ``is_clean``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per driver and stint with the columns ``drv``, ``stint``,
+        ``compound``, ``clean_laps`` and ``degradation_per_lap`` (seconds
+        lost per lap of tyre age). Stints with fewer than
+        ``MIN_CLEAN_LAPS`` clean laps are left out.
+
+    Raises
+    ------
+    KeyError
+        If a required column is missing.
+
+    Notes
+    -----
+    The fuel burned during the stint makes the car faster, so the value
+    measured here is smaller than the real wear of the tyre.
+    """
+    clean = laps[laps["is_clean"]].copy()
+    clean["compound"] = clean["compound"].fillna("UNKNOWN")
+    clean = clean.sort_values(["drv", "stint", "life"])
+
+    rows = []
+    for (drv, stint), group in clean.groupby(["drv", "stint"]):
+        if len(group) < MIN_CLEAN_LAPS:
+            continue
+        first = group.head(FIRST_LAST_LAPS)
+        last = group.tail(FIRST_LAST_LAPS)
+        time_change = last["time"].mean() - first["time"].mean()
+        age_change = last["life"].mean() - first["life"].mean()
+        rows.append(
+            {
+                "drv": drv,
+                "stint": stint,
+                "compound": group["compound"].iloc[0],
+                "clean_laps": len(group),
+                "degradation_per_lap": time_change / age_change,
+            }
+        )
+    columns = ["drv", "stint", "compound", "clean_laps", "degradation_per_lap"]
+    return pd.DataFrame(rows, columns=columns)
