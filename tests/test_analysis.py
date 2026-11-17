@@ -388,3 +388,151 @@ def test_driver_strategies_missing_column_raises():
 
     with pytest.raises(KeyError):
         analysis.driver_strategies(laps)
+
+
+# ---------------------------------------------------------------------------
+# tyre_degradation
+# ---------------------------------------------------------------------------
+
+
+def make_degradation_laps(*stints):
+    """
+    One row per lap. Each stint is ``(drv, stint, compound, number_of_laps,
+    slope)`` or the same with a sixth item, the positions of the laps that
+    are not clean.
+
+    ``life`` goes 1, 2, 3... and the lap time is ``90 + slope * (life - 1)``,
+    so the true loss per lap of age is exactly ``slope``.
+    """
+    rows = []
+    for drv, stint, compound, number_of_laps, slope, *rest in stints:
+        not_clean = rest[0] if rest else ()
+        for position in range(number_of_laps):
+            rows.append(
+                {
+                    "drv": drv,
+                    "stint": stint,
+                    "compound": compound,
+                    "life": position + 1,
+                    "time": 90.0 + slope * position,
+                    "is_clean": position not in not_clean,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+LONG = analysis.MIN_CLEAN_LAPS + 2
+
+
+def test_tyre_degradation_measures_the_loss_per_lap_of_age():
+    laps = make_degradation_laps(("AAA", 1, "SOFT", LONG, 0.1))
+    result = analysis.tyre_degradation(laps)
+    assert result["degradation_per_lap"].iloc[0] == pytest.approx(0.1)
+
+
+def test_tyre_degradation_has_the_documented_columns():
+    laps = make_degradation_laps(("AAA", 1, "SOFT", LONG, 0.1))
+    result = analysis.tyre_degradation(laps)
+    assert list(result.columns) == [
+        "drv",
+        "stint",
+        "compound",
+        "clean_laps",
+        "degradation_per_lap",
+    ]
+    assert result["compound"].iloc[0] == "SOFT"
+    assert result["clean_laps"].iloc[0] == LONG
+
+
+def test_tyre_degradation_gives_one_row_per_driver_and_stint():
+    laps = make_degradation_laps(
+        ("BBB", 2, "HARD", LONG, 0.05),
+        ("AAA", 1, "SOFT", LONG, 0.2),
+        ("BBB", 1, "SOFT", LONG, 0.1),
+    )
+    result = analysis.tyre_degradation(laps)
+    assert list(zip(result["drv"], result["stint"])) == [
+        ("AAA", 1),
+        ("BBB", 1),
+        ("BBB", 2),
+    ]
+    assert list(result["degradation_per_lap"]) == pytest.approx([0.2, 0.1, 0.05])
+
+
+def test_tyre_degradation_leaves_out_a_stint_with_too_few_clean_laps():
+    laps = make_degradation_laps(
+        ("AAA", 1, "SOFT", analysis.MIN_CLEAN_LAPS - 1, 0.1),
+        ("BBB", 1, "SOFT", analysis.MIN_CLEAN_LAPS, 0.1),
+    )
+    result = analysis.tyre_degradation(laps)
+    assert list(result["drv"]) == ["BBB"]
+
+
+def test_tyre_degradation_ignores_laps_that_are_not_clean():
+    # The last lap is not clean and very slow: it must change nothing.
+    laps = make_degradation_laps(("AAA", 1, "SOFT", LONG, 0.1))
+    laps.loc[laps["life"] == LONG, ["time", "is_clean"]] = [500.0, False]
+    result = analysis.tyre_degradation(laps)
+    assert result["clean_laps"].iloc[0] == LONG - 1
+    assert result["degradation_per_lap"].iloc[0] == pytest.approx(0.1)
+
+
+def test_tyre_degradation_divides_by_the_tyre_age_not_the_lap_count():
+    # Five laps in the middle are not clean, so ``life`` has a gap there.
+    laps = make_degradation_laps(
+        ("AAA", 1, "SOFT", analysis.MIN_CLEAN_LAPS + 5, 0.1, range(3, 8))
+    )
+    result = analysis.tyre_degradation(laps)
+    assert result["degradation_per_lap"].iloc[0] == pytest.approx(0.1)
+
+
+def test_tyre_degradation_compares_only_the_first_and_last_laps():
+    # Start 90 s, end 91 s, and a very slow middle that must not count.
+    laps = make_degradation_laps(("AAA", 1, "SOFT", LONG, 0.0))
+    first = analysis.FIRST_LAST_LAPS
+    laps.loc[laps["life"] > LONG - first, "time"] = 91.0
+    laps.loc[(laps["life"] > first) & (laps["life"] <= LONG - first), "time"] = 120.0
+    result = analysis.tyre_degradation(laps)
+    assert result["degradation_per_lap"].iloc[0] == pytest.approx(1.0 / (LONG - first))
+
+
+def test_tyre_degradation_does_not_depend_on_the_row_order():
+    # Curved times, so that taking the wrong laps would change the answer.
+    laps = make_degradation_laps(("AAA", 1, "SOFT", LONG, 0.0))
+    laps["time"] = 90.0 + 0.01 * laps["life"] ** 2
+    shuffled = laps.sample(frac=1, random_state=0)
+    expected = analysis.tyre_degradation(laps)
+    result = analysis.tyre_degradation(shuffled)
+    pd.testing.assert_frame_equal(result, expected)
+
+
+def test_tyre_degradation_labels_a_missing_compound_unknown():
+    laps = make_degradation_laps(("AAA", 1, None, LONG, 0.1))
+    result = analysis.tyre_degradation(laps)
+    assert result["compound"].iloc[0] == "UNKNOWN"
+
+
+def test_tyre_degradation_gives_an_empty_table_with_columns_if_nothing_qualifies():
+    laps = make_degradation_laps(("AAA", 1, "SOFT", analysis.MIN_CLEAN_LAPS - 1, 0.1))
+    result = analysis.tyre_degradation(laps)
+    assert result.empty
+    assert list(result.columns) == [
+        "drv",
+        "stint",
+        "compound",
+        "clean_laps",
+        "degradation_per_lap",
+    ]
+
+
+def test_tyre_degradation_does_not_modify_its_input():
+    laps = make_degradation_laps(("AAA", 1, None, LONG, 0.1))
+    before = laps.copy()
+    analysis.tyre_degradation(laps)
+    pd.testing.assert_frame_equal(laps, before)
+
+
+def test_tyre_degradation_missing_column_raises():
+    laps = make_degradation_laps(("AAA", 1, "SOFT", LONG, 0.1)).drop(columns="life")
+    with pytest.raises(KeyError):
+        analysis.tyre_degradation(laps)
