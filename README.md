@@ -44,7 +44,7 @@ the race is read from disk, so the project works without internet.
 You need Python 3.13 (it was developed with 3.13).
 
 ```bash
-git clone <the URL of this repository>
+git clone https://github.com/skygr0u/boxbox.git
 cd "Box, Box"
 python3 -m venv .venv
 source .venv/bin/activate        # on Windows: .venv\Scripts\activate
@@ -91,7 +91,7 @@ boxbox/
   analysis.py    race_pace, get_stints, driver_strategies, tyre_degradation
   plots.py       plot_race_pace, plot_strategies, plot_degradation
 tests/           one test file per module
-notebooks/       01_data ... 04_plots
+notebooks/       01_data, 02_cleaning, 03_analysis, 04_plots
 data/snapshots/  CSV copy of each downloaded race
 images/          the charts used in this README
 ```
