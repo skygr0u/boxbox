@@ -17,3 +17,6 @@ __pycache__/
 
 # Scratch work (experiments that are not part of the project)
 scratch/
+
+# Documents (Docx, md)
+/Doc
