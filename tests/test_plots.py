@@ -34,6 +34,18 @@ def make_pace():
     )
 
 
+def make_stints():
+    """AAA: SOFT laps 1-10, HARD laps 11-30. BBB: MEDIUM laps 1-20."""
+    return pd.DataFrame(
+        {
+            "drv": ["AAA", "AAA", "BBB"],
+            "compound": ["SOFT", "HARD", "MEDIUM"],
+            "start_lap": [1, 11, 1],
+            "end_lap": [10, 30, 20],
+        }
+    )
+
+
 def test_plot_race_pace_draws_the_gaps_with_the_fastest_driver_on_top():
     ax = plots.plot_race_pace(make_pace()).axes[0]
     assert [rect.get_width() for rect in get_bars(ax)] == [0.0, 0.5, 2.0]
@@ -52,3 +64,23 @@ def test_plot_race_pace_colours_each_bar_by_its_team():
 def test_plot_race_pace_missing_column_raises():
     with pytest.raises(KeyError):
         plots.plot_race_pace(make_pace().drop(columns="team"))
+
+
+def test_plot_strategies_draws_one_block_per_stint_at_the_right_place():
+    ax = plots.plot_strategies(make_stints()).axes[0]
+    places = [(block.get_x(), block.get_width()) for block in get_bars(ax)]
+    assert places == [(0, 10), (10, 20), (0, 20)]
+
+
+def test_plot_strategies_colours_each_block_by_its_compound():
+    ax = plots.plot_strategies(make_stints()).axes[0]
+    colours = [block.get_facecolor() for block in get_bars(ax)]
+    expected = [to_rgba(plots.COMPOUND_COLOURS[c]) for c in ("SOFT", "HARD", "MEDIUM")]
+    assert colours == expected
+
+
+def test_plot_strategies_follows_the_order_of_the_drivers_given():
+    fig = plots.plot_strategies(make_stints(), drivers=["BBB", "AAA"])
+    ax = fig.axes[0]
+    assert [label.get_text() for label in ax.get_yticklabels()] == ["BBB", "AAA"]
+    assert get_bars(ax)[0].get_width() == 20  # BBB is now the first row
