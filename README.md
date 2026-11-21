@@ -64,6 +64,7 @@ question and shows the result of the functions it uses:
 
 | Notebook | Content |
 |---|---|
+| `00_exploration.ipynb` | the first exploration of the sources, kept as a record (the code was then moved to `boxbox/`) |
 | `01_data.ipynb` | getting the data: races, drivers, download, CSV snapshots, `prepare_laps` |
 | `02_cleaning.ipynb` | which laps are representative: the six cleaning rules, a second race (Monaco) as a check |
 | `03_analysis.ipynb` | the three questions, with the numbers |
@@ -91,7 +92,7 @@ boxbox/
   analysis.py    race_pace, get_stints, driver_strategies, tyre_degradation
   plots.py       plot_race_pace, plot_strategies, plot_degradation
 tests/           one test file per module
-notebooks/       01_data, 02_cleaning, 03_analysis, 04_plots
+notebooks/       00_exploration, 01_data, 02_cleaning, 03_analysis, 04_plots
 data/snapshots/  CSV copy of each downloaded race
 images/          the charts used in this README
 ```
