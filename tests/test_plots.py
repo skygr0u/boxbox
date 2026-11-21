@@ -5,6 +5,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
+from matplotlib.collections import LineCollection, PathCollection
 from matplotlib.colors import to_rgba
 from matplotlib.patches import Rectangle
 
@@ -84,3 +85,35 @@ def test_plot_strategies_follows_the_order_of_the_drivers_given():
     ax = fig.axes[0]
     assert [label.get_text() for label in ax.get_yticklabels()] == ["BBB", "AAA"]
     assert get_bars(ax)[0].get_width() == 20  # BBB is now the first row
+
+
+def make_degradation():
+    """Three SOFT stints and one HARD stint, in the order SOFT, HARD, SOFT, SOFT."""
+    return pd.DataFrame(
+        {
+            "compound": ["SOFT", "HARD", "SOFT", "SOFT"],
+            "degradation_per_lap": [0.2, 0.05, 0.1, 0.9],
+        }
+    )
+
+
+def test_plot_degradation_draws_one_dot_per_stint_grouped_by_compound():
+    ax = plots.plot_degradation(make_degradation()).axes[0]
+    groups = [c for c in ax.collections if isinstance(c, PathCollection)]
+    heights = [list(group.get_offsets()[:, 1]) for group in groups]  # type: ignore
+    assert heights == [[0.2, 0.1, 0.9], [0.05]]  # SOFT first, then HARD
+    labels = [label.get_text() for label in ax.get_xticklabels()]
+    assert labels == ["SOFT\n(n=3)", "HARD\n(n=1)"]
+
+
+def test_plot_degradation_marks_the_median_of_each_compound():
+    ax = plots.plot_degradation(make_degradation()).axes[0]
+    lines = [c for c in ax.collections if isinstance(c, LineCollection)]
+    medians = [line.get_segments()[0][0][1] for line in lines]
+    # the median of 0.2, 0.1, 0.9 is 0.2 (their mean would be 0.4)
+    assert medians == pytest.approx([0.2, 0.05])
+
+
+def test_plot_degradation_missing_column_raises():
+    with pytest.raises(KeyError):
+        plots.plot_degradation(make_degradation().drop(columns="compound"))
