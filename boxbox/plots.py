@@ -135,3 +135,60 @@ def plot_strategies(stints, drivers=None):
         handles=handles, title="Compound", loc="upper left", bbox_to_anchor=(1.01, 1)
     )
     return fig
+
+
+def plot_degradation(degradation):
+    """
+    Draw the tyre degradation of every stint, grouped by compound.
+
+    Each dot is a stint: its height is the lap time lost per lap of tyre age.
+    The dots of one compound are spread sideways so that they do not hide
+    each other, and a black line marks the median of the compound. The
+    number of stints is written under the name of each compound.
+
+    Parameters
+    ----------
+    degradation : pandas.DataFrame
+        Table as returned by ``tyre_degradation``, with the columns
+        ``compound`` and ``degradation_per_lap``.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The figure. It is not shown and not saved: the caller decides.
+
+    Raises
+    ------
+    KeyError
+        If ``compound`` or ``degradation_per_lap`` is missing.
+    """
+    used = set(degradation["compound"])
+    known = [name for name in COMPOUND_COLOURS if name in used]
+    compounds = known + sorted(used - set(known))
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.axhline(0, color="grey", linewidth=0.8)
+    labels = []
+    for position, compound in enumerate(compounds):
+        values = degradation.loc[
+            degradation["compound"] == compound, "degradation_per_lap"
+        ]
+        count = len(values)
+        step = 0.6 / count
+        xs = [position + (i - (count - 1) / 2) * step for i in range(count)]
+        colour = COMPOUND_COLOURS.get(compound, COMPOUND_COLOURS["UNKNOWN"])
+        ax.scatter(xs, values, color=colour, edgecolor="black", zorder=3)
+        ax.hlines(
+            values.median(),
+            position - 0.35,
+            position + 0.35,
+            color="black",
+            linewidth=2,
+        )
+        labels.append(f"{compound}\n(n={count})")
+
+    ax.set_xticks(range(len(compounds)))
+    ax.set_xticklabels(labels)
+    ax.set_ylabel("Lap time lost per lap of tyre age (seconds)")
+    ax.set_title("Tyre degradation per stint (line = median)")
+    return fig
