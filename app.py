@@ -74,7 +74,12 @@ drivers_column.metric("Drivers", laps["drv"].nunique())
 clean_column.metric("Clean laps", int(laps["is_clean"].sum()))
 
 wet_share = laps.loc[laps["is_clean"], "compound"].isin(["INTERMEDIATE", "WET"]).mean()
-if wet_share > 0.05:
+if wet_share > 0.95:
+    st.info(
+        "This was a wet race. Pace is compared between drivers in the same "
+        "conditions, but lap times are not comparable with a dry race."
+    )
+elif wet_share > 0.05:
     st.warning(
         f"{wet_share:.0%} of the clean laps were on wet-weather tyres. "
         "The median pace mixes wet and dry laps, so read the Pace tab with care."
