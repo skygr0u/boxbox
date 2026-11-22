@@ -43,7 +43,7 @@ st.caption("Pace, tyre strategy and tyre degradation of a Formula 1 race.")
 
 # The inputs live in the sidebar.
 st.sidebar.header("Race")
-year = st.sidebar.selectbox("Season", [2022, 2023, 2024, 2025])
+year = st.sidebar.selectbox("Season", [2022, 2023, 2024, 2025, 2026])
 
 try:
     names = race_names(year)
