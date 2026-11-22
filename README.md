@@ -83,6 +83,30 @@ race_pace(laps)
 
 To download a race again, use `get_laps(2022, "bahrain", refresh=True)`.
 
+
+## Web app
+
+The project also has a small Streamlit app to explore any race without
+writing code. It lives on the `streamlit-app` branch until it is merged.
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Choose a season and a Grand Prix in the sidebar. The app downloads the race
+the first time (a CSV is saved in `data/snapshots`) and shows three tabs:
+race pace, tyre strategy and tyre degradation, each with a chart and a table.
+
+Notes:
+
+- The app needs an internet connection to list the races of a season and to
+  download a race that is not saved yet.
+- If more than 5% of the clean laps were on wet-weather tyres, the app shows a
+  warning, because the median pace then mixes wet and dry laps.
+- Tyre degradation does not remove the fuel effect, so it underestimates the
+  real wear.
+  
 ## Project structure
 
 ```
