@@ -104,4 +104,13 @@ with degradation_tab:
         st.info("No stint is long enough to measure tyre degradation in this race.")
     else:
         st.pyplot(plot_degradation(degradation))
+        st.caption(
+            "Each dot is one stint: the time gained or lost per lap as the tyre "
+            "ages. Fuel burn is not removed, so real wear is underestimated."
+        )
+        if wet_share > 0.05:
+            st.caption(
+                "In wet or mixed races these values mostly reflect the changing "
+                "track conditions, not tyre wear."
+            )
         st.dataframe(degradation, hide_index=True)
