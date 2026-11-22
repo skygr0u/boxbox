@@ -2,6 +2,12 @@
 
 import streamlit as st
 
+from boxbox.analysis import (
+    driver_strategies,
+    get_stints,
+    race_pace,
+    tyre_degradation,
+)
 from boxbox.cleaning import mark_clean_laps
 from boxbox.data import (
     GRAND_PRIX_SUFFIX,
@@ -10,6 +16,7 @@ from boxbox.data import (
     list_races,
     prepare_laps,
 )
+from boxbox.plots import plot_degradation, plot_race_pace, plot_strategies
 
 # Must be the first Streamlit call of the script.
 st.set_page_config(page_title="Box, Box", layout="wide")
@@ -65,3 +72,24 @@ laps_column, drivers_column, clean_column = st.columns(3)
 laps_column.metric("Laps", len(laps))
 drivers_column.metric("Drivers", laps["drv"].nunique())
 clean_column.metric("Clean laps", int(laps["is_clean"].sum()))
+
+pace_tab, strategy_tab, degradation_tab = st.tabs(["Pace", "Strategy", "Degradation"])
+
+with pace_tab:
+    pace = race_pace(laps)
+    st.pyplot(plot_race_pace(pace))
+    st.dataframe(pace, hide_index=True)
+
+with strategy_tab:
+    strategies = driver_strategies(laps)
+    stints = get_stints(laps)
+    st.pyplot(plot_strategies(stints, drivers=strategies["drv"].tolist()))
+    st.dataframe(strategies, hide_index=True)
+
+with degradation_tab:
+    degradation = tyre_degradation(laps)
+    if degradation.empty:
+        st.info("No stint is long enough to measure tyre degradation in this race.")
+    else:
+        st.pyplot(plot_degradation(degradation))
+        st.dataframe(degradation, hide_index=True)
