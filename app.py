@@ -2,8 +2,34 @@
 
 import streamlit as st
 
+from boxbox.cleaning import mark_clean_laps
+from boxbox.data import (
+    GRAND_PRIX_SUFFIX,
+    DataLoadError,
+    get_laps,
+    list_races,
+    prepare_laps,
+)
+
 # Must be the first Streamlit call of the script.
 st.set_page_config(page_title="Box, Box", layout="wide")
+
+
+@st.cache_data(show_spinner=False)
+def race_names(year):
+    """Return the official names of the Grand Prix of a season."""
+    return list_races(year)
+
+
+@st.cache_data(show_spinner="Loading the race...")
+def load_race(year, race):
+    """Return the prepared laps of a race, with the column ``is_clean``.
+
+    The result is cached: asking again for the same season and race does
+    not read the file or compute anything a second time.
+    """
+    return mark_clean_laps(prepare_laps(get_laps(year, race)))
+
 
 st.title("Box, Box")
 st.caption("Pace, tyre strategy and tyre degradation of a Formula 1 race.")
@@ -11,6 +37,31 @@ st.caption("Pace, tyre strategy and tyre degradation of a Formula 1 race.")
 # The inputs live in the sidebar.
 st.sidebar.header("Race")
 year = st.sidebar.selectbox("Season", [2022, 2023, 2024, 2025])
-race = st.sidebar.text_input("Race name", value="bahrain")
 
-st.write(f"You chose: **{race}**, {year}")
+try:
+    names = race_names(year)
+except DataLoadError as error:
+    st.error(str(error))
+    st.stop()
+
+default = names.index("Bahrain Grand Prix") if "Bahrain Grand Prix" in names else 0
+official_name = st.sidebar.selectbox("Grand Prix", names, index=default)
+if official_name is None:  # a season without races has nothing to choose
+    st.warning(f"No races found for {year}.")
+    st.stop()
+
+# The snapshot file is named after the short name ("Bahrain"), so a race is
+# always saved under the same name, whatever the user does.
+race = official_name.removesuffix(GRAND_PRIX_SUFFIX)
+
+try:
+    laps = load_race(year, race)
+except (ValueError, DataLoadError) as error:
+    st.error(str(error))
+    st.stop()
+
+st.subheader(f"{official_name} {year}")
+laps_column, drivers_column, clean_column = st.columns(3)
+laps_column.metric("Laps", len(laps))
+drivers_column.metric("Drivers", laps["drv"].nunique())
+clean_column.metric("Clean laps", int(laps["is_clean"].sum()))
