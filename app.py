@@ -6,6 +6,7 @@ from boxbox.analysis import (
     driver_strategies,
     get_stints,
     race_pace,
+    race_results,
     tyre_degradation,
 )
 from boxbox.cleaning import mark_clean_laps
@@ -18,8 +19,10 @@ from boxbox.data import (
 )
 from boxbox.plots import plot_degradation, plot_race_pace, plot_strategies
 
-# Must be the first Streamlit call of the script.
-st.set_page_config(page_title="Box, Box", layout="wide")
+# Compounds used in the rain.
+WET_COMPOUNDS = ["INTERMEDIATE", "WET"]
+
+st.set_page_config(page_title="Box, Box", page_icon="🏁", layout="wide")
 
 
 @st.cache_data(show_spinner=False)
@@ -30,18 +33,13 @@ def race_names(year):
 
 @st.cache_data(show_spinner="Loading the race...")
 def load_race(year, race):
-    """Return the prepared laps of a race, with the column ``is_clean``.
-
-    The result is cached: asking again for the same season and race does
-    not read the file or compute anything a second time.
-    """
+    """Return the prepared laps of a race, with the column ``is_clean``."""
     return mark_clean_laps(prepare_laps(get_laps(year, race)))
 
 
 st.title("Box, Box")
 st.caption("Pace, tyre strategy and tyre degradation of a Formula 1 race.")
 
-# The inputs live in the sidebar.
 st.sidebar.header("Race")
 year = st.sidebar.selectbox("Season", [2022, 2023, 2024, 2025, 2026])
 
@@ -73,7 +71,8 @@ laps_column.metric("Laps", len(laps))
 drivers_column.metric("Drivers", laps["drv"].nunique())
 clean_column.metric("Clean laps", int(laps["is_clean"].sum()))
 
-wet_share = laps.loc[laps["is_clean"], "compound"].isin(["INTERMEDIATE", "WET"]).mean()
+wet_share = laps.loc[laps["is_clean"], "compound"].isin(WET_COMPOUNDS).mean()
+dry_only = False
 if wet_share > 0.95:
     st.info(
         "This was a wet race. Pace is compared between drivers in the same "
@@ -82,20 +81,57 @@ if wet_share > 0.95:
 elif wet_share > 0.05:
     st.warning(
         f"{wet_share:.0%} of the clean laps were on wet-weather tyres. "
-        "The median pace mixes wet and dry laps, so read the Pace tab with care."
+        "The median pace mixes wet and dry laps: tick the box in the sidebar "
+        "to compute the pace on dry-tyre laps only."
+    )
+    dry_only = st.sidebar.checkbox("Pace on dry-tyre laps only")
+
+st.sidebar.divider()
+st.sidebar.caption("Lap data: TracingInsights")
+
+results_tab, pace_tab, strategy_tab, degradation_tab = st.tabs(
+    ["Results", "Pace", "Strategy", "Degradation"]
+)
+
+with results_tab:
+    results = race_results(laps)
+    st.dataframe(
+        results,
+        hide_index=True,
+        height=35 * (len(results) + 1) + 3,  # tall enough to show every row
+        column_config={
+            "final_pos": "Pos",
+            "drv": "Driver",
+            "team": "Team",
+            "laps": "Laps",
+            "time": "Time / gap",
+        },
+    )
+    st.caption(
+        "Order and gaps are rebuilt from the lap times, so they can differ "
+        "from the official result by a few tenths of a second. Penalties given "
+        "after the race are not included. A time shows n/a when the data has "
+        "no lap time for the first lap, and after a red flag the gaps are not "
+        "reliable."
     )
 
-pace_tab, strategy_tab, degradation_tab = st.tabs(["Pace", "Strategy", "Degradation"])
-
 with pace_tab:
-    pace = race_pace(laps)
+    pace_laps = laps[~laps["compound"].isin(WET_COMPOUNDS)] if dry_only else laps
+    pace = race_pace(pace_laps)
     st.pyplot(plot_race_pace(pace))
     st.dataframe(pace, hide_index=True)
 
 with strategy_tab:
     strategies = driver_strategies(laps)
     stints = get_stints(laps)
-    st.pyplot(plot_strategies(stints, drivers=strategies["drv"].tolist()))
+    all_drivers = strategies["drv"].tolist()
+    chosen = st.multiselect("Drivers", all_drivers, default=all_drivers)
+    # Keep the finishing order, whatever the order of the clicks.
+    shown = [driver for driver in all_drivers if driver in chosen]
+    if shown:
+        st.pyplot(plot_strategies(stints, drivers=shown))
+    else:
+        st.info("Choose at least one driver.")
     st.dataframe(strategies, hide_index=True)
 
 with degradation_tab:
