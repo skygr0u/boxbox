@@ -22,7 +22,7 @@ from boxbox.plots import plot_degradation, plot_race_pace, plot_strategies
 # Compounds used in the rain.
 WET_COMPOUNDS = ["INTERMEDIATE", "WET"]
 
-st.set_page_config(page_title="Box, Box", layout="wide")
+st.set_page_config(page_title="Box, Box", page_icon="🏁", layout="wide")
 
 
 @st.cache_data(show_spinner=False)
@@ -86,12 +86,27 @@ elif wet_share > 0.05:
     )
     dry_only = st.sidebar.checkbox("Pace on dry-tyre laps only")
 
+st.sidebar.divider()
+st.sidebar.caption("Lap data: TracingInsights")
+
 results_tab, pace_tab, strategy_tab, degradation_tab = st.tabs(
     ["Results", "Pace", "Strategy", "Degradation"]
 )
 
 with results_tab:
-    st.dataframe(race_results(laps), hide_index=True)
+    results = race_results(laps)
+    st.dataframe(
+        results,
+        hide_index=True,
+        height=35 * (len(results) + 1) + 3,  # tall enough to show every row
+        column_config={
+            "final_pos": "Pos",
+            "drv": "Driver",
+            "team": "Team",
+            "laps": "Laps",
+            "time": "Time / gap",
+        },
+    )
     st.caption(
         "Order and gaps are rebuilt from the lap times, so they can differ "
         "from the official result by a few tenths of a second. Penalties given "
