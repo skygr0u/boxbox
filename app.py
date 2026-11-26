@@ -23,9 +23,26 @@ from boxbox.plots import plot_degradation, plot_race_pace, plot_strategies
 WET_COMPOUNDS = ["INTERMEDIATE", "WET"]
 
 st.set_page_config(page_title="Box, Box", page_icon="🏁", layout="wide")
-# Less empty space above the title, so the results show higher on the page.
+# Less empty space above the title, and a big loading circle in the middle
+# of the screen.
 st.markdown(
-    "<style>.block-container {padding-top: 1rem;}</style>",
+    """
+    <style>
+    .block-container {padding-top: 1rem;}
+    [data-testid="stSpinner"] {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(2);
+        width: max-content;
+        padding: 1rem 1.5rem;
+        background: white;
+        border-radius: 1rem;
+        box-shadow: 0 0 2rem rgba(0, 0, 0, 0.25);
+        z-index: 1000;
+    }
+    </style>
+    """,
     unsafe_allow_html=True,
 )
 
