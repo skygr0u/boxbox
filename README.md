@@ -1,19 +1,21 @@
-# Box, Box: a lap-by-lap analysis of the Bahrain 2022 Grand Prix
+# Box, Box: lap-by-lap analysis of Formula 1 races
 
 Individual project for *Coding for Data Science and Data Management*
 (University of Milan), by Aziz Mejri.
 
 Box, Box downloads the lap times of a Formula 1 race, cleans them, and
-answers three questions about the **Bahrain 2022** race (dry):
+answers three questions about it:
 
 1. **Pace:** who was fastest over the whole race?
 2. **Tyre strategy:** who stopped when, and on which compounds?
 3. **Tyre degradation:** how much lap time does a set of tyres lose per lap of age?
 
-A small web app (see [Web app](#web-app)) lets you do the same for any race of
-the 2022 to 2026 seasons.
+It works on the races of the 2022 to 2026 seasons. The notebooks and the
+results below use the **Bahrain 2022** Grand Prix (a dry race) as the worked
+example. A small web app (see [Web app](#web-app)) lets you explore any other
+race without writing code.
 
-## Results
+## Example results: Bahrain 2022
 
 **1. Pace.** LEC had the best median clean lap (97.693 s). PER (+0.36 s),
 VER (+0.40 s) and SAI (+0.46 s) were next; NOR was last, 3.77 s behind.
@@ -38,9 +40,9 @@ lot, so a single SOFT stint can wear less than a MEDIUM one.
 
 The data come from [TracingInsights](https://github.com/TracingInsights): one
 repository per season, one `laptimes.json` per driver and session. The source
-was approved by the instructor. The first time a race is requested, the 20
-driver files are downloaded and saved as a CSV in `data/snapshots/`; after that
-the race is read from disk, so the project works without internet.
+was approved by the instructor. The first time a race is requested, the driver
+files of the race are downloaded and saved as a CSV in `data/snapshots/`; after
+that the race is read from disk, so the project works without internet.
 
 ## Setup
 
@@ -73,7 +75,7 @@ question and shows the result of the functions it uses:
 | `03_analysis.ipynb` | the three questions, with the numbers |
 | `04_plots.ipynb` | the three charts, saved in `images/` |
 
-The same steps in code:
+The same steps in code, for any race:
 
 ```python
 from boxbox.analysis import race_pace
@@ -136,7 +138,7 @@ images/          the charts and the app screenshot used in this README
   green flag, deleted by the stewards, inaccurate, or without a time. Strategy
   uses all the laps; pace and degradation use only the clean ones.
 - **Median, not mean,** for pace: a few odd laps (traffic, a mistake) do not
-  move it. On this race the mean and the median give a different order for
+  move it. On Bahrain 2022 the mean and the median give a different order for
   PER and VER.
 - **A stint is not a new set of tyres.** The tyre age is `life`, the real age
   of the set, so a used set is already worn when it is fitted.
@@ -149,14 +151,14 @@ images/          the charts and the app screenshot used in this README
 
 ## Limits
 
-- Only one dry race is analysed in depth. A second race (Monaco 2022) was
-  used to test the cleaning; it mixes wet and dry laps, so a median over the
-  whole race says nothing about pace there.
+- Only one dry race (Bahrain 2022) is analysed in depth. A second race (Monaco
+  2022) was used to test the cleaning; it mixes wet and dry laps, so a median
+  over the whole race says nothing about pace there.
 - The degradation values are net of fuel: a lighter car is faster, so the
   measured wear is smaller than the real wear. Traffic and track conditions
   are ignored.
-- HARD has only 6 stints with enough clean laps, so nothing firm can be said
-  about HARD against MEDIUM. There is no statistical test.
+- HARD has only 6 stints with enough clean laps in Bahrain 2022, so nothing
+  firm can be said about HARD against MEDIUM. There is no statistical test.
 - `pos_lap1` in the strategy table is the position after lap 1, not the
   starting grid, which is not in the lap data.
 - The team colours are those of the 2022 season; a renamed or new team is
