@@ -10,6 +10,9 @@ answers three questions about the **Bahrain 2022** race (dry):
 2. **Tyre strategy:** who stopped when, and on which compounds?
 3. **Tyre degradation:** how much lap time does a set of tyres lose per lap of age?
 
+A small web app (see [Web app](#web-app)) lets you do the same for any race of
+the 2022 to 2026 seasons.
+
 ## Results
 
 **1. Pace.** LEC had the best median clean lap (97.693 s). PER (+0.36 s),
@@ -45,7 +48,7 @@ You need Python 3.13 (it was developed with 3.13).
 
 ```bash
 git clone https://github.com/skygr0u/boxbox.git
-cd "Box, Box"
+cd boxbox
 python3 -m venv .venv
 source .venv/bin/activate        # on Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -83,42 +86,47 @@ race_pace(laps)
 
 To download a race again, use `get_laps(2022, "bahrain", refresh=True)`.
 
-
 ## Web app
 
-The project also has a small Streamlit app to explore any race without
-writing code. It lives on the `streamlit-app` branch until it is merged.
+A small Streamlit app explores any race without writing code.
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Choose a season and a Grand Prix in the sidebar. The app downloads the race
-the first time (a CSV is saved in `data/snapshots`) and shows three tabs:
-race pace, tyre strategy and tyre degradation, each with a chart and a table.
+![The Box, Box app on the Bahrain 2022 results](images/app.png)
+
+Choose a season (2022 to 2026) and a Grand Prix in the sidebar. The app
+downloads the race the first time (a CSV is saved in `data/snapshots`) and shows
+four tabs: the results table, the race pace, the tyre strategies and the tyre
+degradation. The last three have a chart and a table.
 
 Notes:
 
 - The app needs an internet connection to list the races of a season and to
   download a race that is not saved yet.
 - If more than 5% of the clean laps were on wet-weather tyres, the app shows a
-  warning, because the median pace then mixes wet and dry laps.
-- Tyre degradation does not remove the fuel effect, so it underestimates the
-  real wear.
-  
+  warning, because the median pace then mixes wet and dry laps. In a mixed race
+  a sidebar option computes the pace on dry-tyre laps only.
+- The results table rebuilds the order and the gaps from the lap times: see
+  the limits below.
+
 ## Project structure
 
 ```
+app.py           the Streamlit app
 boxbox/
   data.py        download, snapshots, prepare_laps
   cleaning.py    mark_clean_laps: adds the column is_clean
-  analysis.py    race_pace, get_stints, driver_strategies, tyre_degradation
+  analysis.py    race_pace, get_stints, driver_strategies, tyre_degradation,
+                 race_results
   plots.py       plot_race_pace, plot_strategies, plot_degradation
 tests/           one test file per module
 notebooks/       00_exploration, 01_data, 02_cleaning, 03_analysis, 04_plots
 data/snapshots/  CSV copy of each downloaded race
-images/          the charts used in this README
+images/          the charts and the app screenshot used in this README
+.streamlit/      theme of the app
 ```
 
 ## Main choices
@@ -154,19 +162,14 @@ images/          the charts used in this README
 - The team colours are those of the 2022 season; a renamed or new team is
   drawn in grey.
 - Two spellings of the same race name (`"bahrain"` and `"Bahrain Grand
-  Prix"`) give two snapshot files.
-
-## Use of AI
-
-AI (Claude, by Anthropic) was used as an assistant while building this
-project, as allowed by the course policy. This is what it did and what I did.
-
-**What I did:** I chose the topic and the three questions; I asked the
-instructor and chose TracingInsights as the source; I wrote the first drafts
-of the data functions and of several analysis functions and answered the
-design questions (for example the marker column `is_clean`, snapshots, the
-meaning of a stint, how to measure degradation); I ran every step on the real
-data, checked the outputs, and made all the commits.
-
-**What the AI did:** it explained concepts and the data format, reviewed my
-drafts and pointed out mistakes.
+  Prix"`) give two snapshot files in the functions; the app avoids it by using a
+  drop-down of the official names.
+- The results table is the order on the track, rebuilt from the lap data:
+  penalties given after the race are not included, so it can differ from the
+  official classification (Las Vegas 2026 is an example).
+- The race times and gaps are the sum of the lap times, so they can differ from
+  the official ones by a few tenths of a second. They show `n/a` when a lap time
+  is missing (some races have no time for lap 1) and are not reliable after a
+  red flag.
+- `app.py` and `race_results` have no automated tests: I checked them by hand
+  on several races and against the F1 website.
