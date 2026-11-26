@@ -23,6 +23,11 @@ from boxbox.plots import plot_degradation, plot_race_pace, plot_strategies
 WET_COMPOUNDS = ["INTERMEDIATE", "WET"]
 
 st.set_page_config(page_title="Box, Box", page_icon="🏁", layout="wide")
+# Less empty space above the title, so the results show higher on the page.
+st.markdown(
+    "<style>.block-container {padding-top: 1rem;}</style>",
+    unsafe_allow_html=True,
+)
 
 
 @st.cache_data(show_spinner=False)
@@ -124,14 +129,7 @@ with pace_tab:
 with strategy_tab:
     strategies = driver_strategies(laps)
     stints = get_stints(laps)
-    all_drivers = strategies["drv"].tolist()
-    chosen = st.multiselect("Drivers", all_drivers, default=all_drivers)
-    # Keep the finishing order, whatever the order of the clicks.
-    shown = [driver for driver in all_drivers if driver in chosen]
-    if shown:
-        st.pyplot(plot_strategies(stints, drivers=shown))
-    else:
-        st.info("Choose at least one driver.")
+    st.pyplot(plot_strategies(stints, drivers=strategies["drv"].tolist()))
     st.dataframe(strategies, hide_index=True)
 
 with degradation_tab:
